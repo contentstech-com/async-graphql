@@ -1,47 +1,55 @@
 use jiff::{
     Span, Timestamp, Zoned,
-    civil::{Date, Time},
+    civil::{Date, DateTime, Time},
 };
 
 use crate::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
 
-/// The `printf`-style format string for serializing/deserializing [`Date`].
-const DATE_FORMAT: &str = "%Y-%m-%d";
-
-/// The `printf`-style format string for serializing/deserializing [`Time`].
-const TIME_FORMAT: &str = "%H:%M:%S%.f";
-
-#[Scalar(internal, name = "Date")]
+#[Scalar(internal, name = "PlainDate")]
 impl ScalarType for Date {
     fn parse(value: Value) -> InputValueResult<Self> {
         match value {
-            Value::String(s) => Ok(Date::strptime(DATE_FORMAT, s)?),
+            Value::String(s) => Ok(s.parse()?),
             _ => Err(InputValueError::expected_type(value)),
         }
     }
 
     fn to_value(&self) -> Value {
-        Value::String(self.strftime(DATE_FORMAT).to_string())
+        Value::String(self.to_string())
     }
 }
 
-#[Scalar(internal, name = "Time")]
+#[Scalar(internal, name = "PlainTime")]
 impl ScalarType for Time {
     fn parse(value: Value) -> InputValueResult<Self> {
         match value {
-            Value::String(s) => Ok(Time::strptime(TIME_FORMAT, s)?),
+            Value::String(s) => Ok(s.parse()?),
             _ => Err(InputValueError::expected_type(value)),
         }
     }
 
     fn to_value(&self) -> Value {
-        Value::String(self.strftime(TIME_FORMAT).to_string())
+        Value::String(self.to_string())
+    }
+}
+
+#[Scalar(internal, name = "PlainDateTime")]
+impl ScalarType for DateTime {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        match value {
+            Value::String(s) => Ok(s.parse()?),
+            _ => Err(InputValueError::expected_type(value)),
+        }
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.to_string())
     }
 }
 
 #[Scalar(
     internal,
-    name = "DateTime",
+    name = "Instant",
     specified_by_url = "https://datatracker.ietf.org/doc/html/rfc3339"
 )]
 impl ScalarType for Timestamp {
@@ -97,7 +105,7 @@ impl ScalarType for Span {
 mod tests {
     use jiff::{
         Span, Timestamp, ToSpan, Zoned,
-        civil::{Date, Time},
+        civil::{Date, DateTime, Time},
     };
 
     use crate::{ScalarType, Value};
@@ -285,6 +293,19 @@ mod tests {
     }
 
     #[test]
+    fn test_date_parse() {
+        let cases = [
+            ("2022-01-12", "2022-01-12".parse::<Date>().unwrap()),
+            ("2023-12-31", "2023-12-31".parse::<Date>().unwrap()),
+        ];
+        for (value, expected) in cases {
+            let value = Value::String(value.to_string());
+            let parsed = <Date as ScalarType>::parse(value).unwrap();
+            assert_eq!(parsed, expected);
+        }
+    }
+
+    #[test]
     fn test_time_to_value() {
         let cases = [
             ("04:00:19.12345".parse::<Time>().unwrap(), "04:00:19.12345"),
@@ -310,6 +331,51 @@ mod tests {
         for (value, expected) in cases {
             let value = Value::String(value.to_string());
             let parsed = <Time as ScalarType>::parse(value).unwrap();
+            assert_eq!(parsed, expected);
+        }
+    }
+
+    #[test]
+    fn test_datetime_to_value() {
+        let cases = [
+            (
+                "2022-01-12T04:00:19.12345".parse::<DateTime>().unwrap(),
+                "2022-01-12T04:00:19.12345",
+            ),
+            (
+                "2023-12-31T07:30:19".parse::<DateTime>().unwrap(),
+                "2023-12-31T07:30:19",
+            ),
+        ];
+        for (value, expected) in cases {
+            let value = value.to_value();
+
+            if let Value::String(s) = value {
+                assert_eq!(s, expected);
+            } else {
+                panic!(
+                    "Unexpected Value type when formatting DateTime: {:?}",
+                    value
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_datetime_parse() {
+        let cases = [
+            (
+                "2022-01-12T04:00:19.12345",
+                "2022-01-12T04:00:19.12345".parse::<DateTime>().unwrap(),
+            ),
+            (
+                "2023-12-31T07:30:19",
+                "2023-12-31T07:30:19".parse::<DateTime>().unwrap(),
+            ),
+        ];
+        for (value, expected) in cases {
+            let value = Value::String(value.to_string());
+            let parsed = <DateTime as ScalarType>::parse(value).unwrap();
             assert_eq!(parsed, expected);
         }
     }
